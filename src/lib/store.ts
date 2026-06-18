@@ -19,6 +19,12 @@ export interface Stats {
   withIssues: number;
   totalWords: number;
   labels: string[];
+  issueBreakdown?: {
+    deadImages: number;
+    flashEmbeds: number;
+    noTitle: number;
+    emptyOrShort: number;
+  };
 }
 
 export interface DebugInfo {

@@ -5,7 +5,6 @@ import { useAppStore, type FullEntry, type EntryListItem } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -33,6 +32,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useTheme } from 'next-themes';
 import {
   Upload,
   FileText,
@@ -63,34 +63,39 @@ import {
   Eye,
   ImageIcon,
   Zap,
+  Sun,
+  Moon,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 // ── Config ─────────────────────────────────────────────────────────────────
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  POST: { label: 'Post', icon: <FileText className="h-3.5 w-3.5" />, color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' },
-  PAGE: { label: 'Página', icon: <FileImage className="h-3.5 w-3.5" />, color: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300' },
-  DRAFT: { label: 'Borrador', icon: <FilePenLine className="h-3.5 w-3.5" />, color: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' },
-  COMMENT: { label: 'Comentario', icon: <MessageSquare className="h-3.5 w-3.5" />, color: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300' },
+  POST: { label: 'Post', icon: <FileText className="h-3.5 w-3.5" />, color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' },
+  PAGE: { label: 'Página', icon: <FileImage className="h-3.5 w-3.5" />, color: 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300' },
+  DRAFT: { label: 'Borrador', icon: <FilePenLine className="h-3.5 w-3.5" />, color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300' },
+  COMMENT: { label: 'Comentario', icon: <MessageSquare className="h-3.5 w-3.5" />, color: 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300' },
 };
 
-const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; dotClass: string }> = {
-  pending: { label: 'Pendiente', icon: <Clock className="h-3.5 w-3.5" />, dotClass: 'bg-amber-500' },
-  approved: { label: 'Aprobado', icon: <CheckCircle2 className="h-3.5 w-3.5" />, dotClass: 'bg-emerald-500' },
-  discarded: { label: 'Descartado', icon: <XCircle className="h-3.5 w-3.5" />, dotClass: 'bg-red-500' },
-  needs_editing: { label: 'Necesita edición', icon: <Edit3 className="h-3.5 w-3.5" />, dotClass: 'bg-blue-500' },
+const STATUS_CONFIG: Record<string, { label: string; dotClass: string }> = {
+  pending: { label: 'Pendiente', dotClass: 'bg-amber-500' },
+  approved: { label: 'Aprobado', dotClass: 'bg-emerald-500' },
+  discarded: { label: 'Descartado', dotClass: 'bg-red-500' },
+  needs_editing: { label: 'Necesita edición', dotClass: 'bg-blue-500' },
 };
 
-const ISSUE_ICONS: Record<string, { icon: React.ReactNode; color: string }> = {
-  dead_image_host: { icon: <ImageIcon className="h-3 w-3" />, color: 'text-red-500' },
-  flash_embed: { icon: <Zap className="h-3 w-3" />, color: 'text-orange-500' },
-  empty_content: { icon: <AlertTriangle className="h-3 w-3" />, color: 'text-amber-500' },
-  short_content: { icon: <AlertTriangle className="h-3 w-3" />, color: 'text-amber-500' },
-  no_title: { icon: <AlertTriangle className="h-3 w-3" />, color: 'text-amber-500' },
+const ISSUE_CONFIG: Record<string, { icon: React.ReactNode; color: string; shortLabel: string }> = {
+  dead_image_host: { icon: <ImageIcon className="h-3 w-3" />, color: 'text-red-500', shortLabel: 'Img rota' },
+  flash_embed: { icon: <Zap className="h-3 w-3" />, color: 'text-orange-500', shortLabel: 'Flash' },
+  empty_content: { icon: <AlertTriangle className="h-3 w-3" />, color: 'text-amber-500', shortLabel: 'Vacío' },
+  short_content: { icon: <AlertTriangle className="h-3 w-3" />, color: 'text-yellow-500', shortLabel: 'Corto' },
+  no_title: { icon: <AlertTriangle className="h-3 w-3" />, color: 'text-amber-500', shortLabel: 'Sin título' },
 };
 
 const formatShortDate = (iso: string | null) => {
-  if (!iso) return 'Sin fecha';
+  if (!iso) return '—';
   try { return new Date(iso).toLocaleDateString('es-AR', { year: 'numeric', month: 'short', day: 'numeric' }); }
   catch { return iso; }
 };
@@ -101,35 +106,23 @@ const formatLongDate = (iso: string | null) => {
   catch { return iso; }
 };
 
-// ── Status Dropdown (shared component) ─────────────────────────────────────
+// ── Status Dot ─────────────────────────────────────────────────────────────
 
-function StatusDropdown({
-  currentStatus,
-  onChange,
-  size = 'sm',
-  align = 'start',
-}: {
-  currentStatus: string;
-  onChange: (status: string) => void;
-  size?: 'sm' | 'default';
-  align?: 'start' | 'center' | 'end';
-}) {
-  const config = STATUS_CONFIG[currentStatus] || STATUS_CONFIG.pending;
-
+function StatusDot({ status, onChange }: { status: string; onChange: (s: string) => void }) {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   return (
-    <Select value={currentStatus} onValueChange={onChange}>
+    <Select value={status} onValueChange={onChange}>
       <SelectTrigger
-        className={`w-auto ${size === 'sm' ? 'h-7 w-7 p-0 border-0 shadow-none' : 'h-8 w-40'} gap-0`}
+        className="h-7 w-7 p-0 border-0 shadow-none hover:opacity-80 transition-opacity"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className={`flex items-center justify-center ${size === 'sm' ? 'w-full h-full' : 'gap-1.5'}`}>
-          <div className={`w-2.5 h-2.5 rounded-full ${config.dotClass} flex-shrink-0`} />
-          {size !== 'sm' && <span className="text-xs">{config.label}</span>}
+        <div className="w-full h-full flex items-center justify-center">
+          <div className={`w-3 h-3 rounded-full ${cfg.dotClass} cursor-pointer`} title={cfg.label} />
         </div>
       </SelectTrigger>
-      <SelectContent align={align}>
+      <SelectContent align="start">
         {Object.entries(STATUS_CONFIG).map(([key, c]) => (
-          <SelectItem key={key} value={key} className="text-xs gap-2">
+          <SelectItem key={key} value={key} className="text-xs">
             <div className="flex items-center gap-2">
               <div className={`w-2.5 h-2.5 rounded-full ${c.dotClass}`} />
               {c.label}
@@ -138,6 +131,25 @@ function StatusDropdown({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// ── Theme Toggle ───────────────────────────────────────────────────────────
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8"
+      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      title="Cambiar tema"
+    >
+      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+      <span className="sr-only">Cambiar tema</span>
+    </Button>
   );
 }
 
@@ -151,7 +163,7 @@ function UploadView() {
 
   const processFile = async (file: File) => {
     if (!file.name.endsWith('.atom') && !file.name.endsWith('.xml')) {
-      toast({ title: 'Formato inválido', description: 'Solo se aceptan archivos .atom o .xml', variant: 'destructive' });
+      toast({ title: 'Formato inválido', description: 'Solo .atom o .xml', variant: 'destructive' });
       return;
     }
     setFileName(file.name);
@@ -161,9 +173,9 @@ function UploadView() {
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al procesar el archivo');
+      if (!res.ok) throw new Error(data.error || 'Error al procesar');
       setUploadResult(data);
-      toast({ title: 'Importación exitosa', description: `${data.storedCount} entradas procesadas de "${data.blogTitle}"` });
+      toast({ title: 'Importación exitosa', description: `${data.storedCount} entradas de "${data.blogTitle}"` });
       setView('dashboard');
     } catch (err) {
       toast({ title: 'Error', description: err instanceof Error ? err.message : 'Error desconocido', variant: 'destructive' });
@@ -179,13 +191,13 @@ function UploadView() {
     if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
   }, []);
 
-  const pickFile = (onSelect: (f: File) => void) => {
+  const pickFile = () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.atom,.xml';
     input.onchange = (ev) => {
       const f = (ev.target as HTMLInputElement).files?.[0];
-      if (f) onSelect(f);
+      if (f) processFile(f);
     };
     input.click();
   };
@@ -195,11 +207,10 @@ function UploadView() {
       <div className="max-w-lg w-full mx-auto px-4">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold tracking-tight">
-            <span className="text-amber-600">Curador</span>
+            <span className="text-amber-500">Curador</span>
           </h1>
           <p className="text-muted-foreground mt-2 text-sm leading-relaxed max-w-md mx-auto">
-            Herramienta de curaduría para migrar tu blog desde Blogger.
-            Subí tu archivo de backup .atom, revisá cada post, y exportá solo lo que vale la pena.
+            Subí tu backup .atom de Blogger, revisá cada post, y exportá solo lo que vale la pena.
           </p>
         </div>
 
@@ -207,9 +218,9 @@ function UploadView() {
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
-          onClick={() => pickFile(processFile)}
+          onClick={pickFile}
           className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all duration-200
-            ${isDragging ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/20' : 'border-muted-foreground/25 hover:border-amber-400 hover:bg-muted/50'}
+            ${isDragging ? 'border-amber-500 bg-amber-500/5' : 'border-muted-foreground/25 hover:border-amber-500/50 hover:bg-muted/30'}
             ${isLoading ? 'pointer-events-none opacity-60' : ''}`}
         >
           {isLoading ? (
@@ -219,23 +230,19 @@ function UploadView() {
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3">
-              <Upload className="h-8 w-8 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">
-                  Arrastrá tu archivo <span className="text-amber-600 font-semibold">.atom</span> o <span className="text-amber-600 font-semibold">.xml</span> aquí
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">o hacé click para seleccionarlo</p>
-              </div>
+              <Upload className="h-8 w-8 text-muted-foreground/50" />
+              <p className="text-sm font-medium">
+                Arrastrá tu <span className="text-amber-500 font-semibold">.atom</span> acá
+              </p>
+              <p className="text-xs text-muted-foreground">o click para seleccionar</p>
             </div>
           )}
         </div>
-
-        <div className="mt-6 flex items-center justify-center gap-6 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> Posts</span>
-          <span className="flex items-center gap-1"><FilePenLine className="h-3.5 w-3.5" /> Borradores</span>
-          <span className="flex items-center gap-1"><FileImage className="h-3.5 w-3.5" /> Páginas</span>
-        </div>
       </div>
+
+      <footer className="fixed bottom-0 left-0 right-0 border-t py-3 bg-background/95 backdrop-blur">
+        <div className="text-center text-xs text-muted-foreground">Curador — Migración desde Blogger</div>
+      </footer>
     </div>
   );
 }
@@ -243,41 +250,43 @@ function UploadView() {
 // ── Stats Bar ──────────────────────────────────────────────────────────────
 
 function StatsBar() {
-  const { stats, uploadResult } = useAppStore();
+  const { stats } = useAppStore();
   if (!stats) return null;
 
-  const items = [
-    { label: 'Posts', value: stats.posts, highlight: false },
-    { label: 'Páginas', value: stats.pages, highlight: false },
-    { label: 'Borradores', value: stats.drafts, highlight: false },
-    { label: 'Con problemas', value: stats.withIssues, highlight: true },
-    { label: 'Aprobados', value: stats.approved, highlight: false },
-    { label: 'Pendientes', value: stats.pending, highlight: false },
-    { label: 'Descartados', value: stats.discarded, highlight: false },
-  ];
+  const breakdown = stats.issueBreakdown;
 
   return (
-    <div className="space-y-3">
-      {uploadResult && (
-        <div className="flex items-center gap-2 text-sm flex-wrap">
-          <Archive className="h-4 w-4 text-amber-600 flex-shrink-0" />
-          <span className="font-medium">{uploadResult.blogTitle}</span>
-          {uploadResult.blogAuthor && <span className="text-muted-foreground">· {uploadResult.blogAuthor}</span>}
-          {uploadResult.skippedTypes.length > 0 && (
-            <span className="text-xs text-muted-foreground ml-auto">
-              Omitidos: {uploadResult.skippedTypes.map(s => `${s.type} (${s.count})`).join(', ')}
-            </span>
-          )}
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+      {[
+        { label: 'Posts', value: stats.posts },
+        { label: 'Páginas', value: stats.pages },
+        { label: 'Borradores', value: stats.drafts },
+        { label: 'Aprobados', value: stats.approved },
+        { label: 'Pendientes', value: stats.pending },
+        { label: 'Descartados', value: stats.discarded },
+      ].map((item) => (
+        <div key={item.label} className="rounded-lg p-2.5 text-center bg-muted/30 border border-border/50">
+          <div className="text-lg font-bold">{item.value.toLocaleString('es-AR')}</div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">{item.label}</div>
+        </div>
+      ))}
+
+      {/* Issues card — with breakdown tooltip */}
+      {stats.withIssues > 0 && breakdown && (
+        <div
+          className="rounded-lg p-2.5 text-center bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 col-span-2 sm:col-span-1"
+          title={`Imágenes rotas: ${breakdown.deadImages}\nFlash: ${breakdown.flashEmbeds}\nSin título: ${breakdown.noTitle}\nVacíos/cortos: ${breakdown.emptyOrShort}`}
+        >
+          <div className="text-lg font-bold text-red-600 dark:text-red-400">{stats.withIssues}</div>
+          <div className="text-[10px] text-red-600/70 dark:text-red-400/70 mt-0.5">Con issues</div>
+          <div className="text-[9px] text-muted-foreground mt-1 leading-tight">
+            {breakdown.deadImages > 0 && <div>🔴 {breakdown.deadImages} img rotas</div>}
+            {breakdown.flashEmbeds > 0 && <div>🟠 {breakdown.flashEmbeds} flash</div>}
+            {breakdown.noTitle > 0 && <div>🟡 {breakdown.noTitle} sin título</div>}
+            {breakdown.emptyOrShort > 0 && <div>🟡 {breakdown.emptyOrShort} vacíos/cortos</div>}
+          </div>
         </div>
       )}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-        {items.map((item) => (
-          <div key={item.label} className={`rounded-lg p-3 text-center ${item.highlight ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800' : 'bg-muted/50'}`}>
-            <div className={`text-xl font-bold ${item.highlight ? 'text-amber-600' : ''}`}>{item.value.toLocaleString('es-AR')}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{item.label}</div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -289,9 +298,14 @@ function FilterBar() {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="relative flex-1 min-w-[200px]">
+      <div className="relative flex-1 min-w-[180px]">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar por título o contenido..." value={filters.search} onChange={(e) => setFilter('search', e.target.value)} className="pl-9 h-9 text-sm" />
+        <Input
+          placeholder="Buscar..."
+          value={filters.search}
+          onChange={(e) => setFilter('search', e.target.value)}
+          className="pl-9 h-9 text-sm"
+        />
         {filters.search && (
           <button onClick={() => setFilter('search', '')} className="absolute right-2 top-1/2 -translate-y-1/2">
             <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
@@ -299,13 +313,13 @@ function FilterBar() {
         )}
       </div>
 
-      <Select value={filters.type || 'all_types'} onValueChange={(v) => setFilter('type', v === 'all_types' ? '' : v)}>
-        <SelectTrigger className="w-[130px] h-9 text-sm">
+      <Select value={filters.type || '_all'} onValueChange={(v) => setFilter('type', v === '_all' ? '' : v)}>
+        <SelectTrigger className="w-[120px] h-9 text-sm">
           <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
           <SelectValue placeholder="Tipo" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all_types">Todos</SelectItem>
+          <SelectItem value="_all">Todos</SelectItem>
           <SelectItem value="POST">Posts</SelectItem>
           <SelectItem value="PAGE">Páginas</SelectItem>
           <SelectItem value="DRAFT">Borradores</SelectItem>
@@ -313,10 +327,10 @@ function FilterBar() {
         </SelectContent>
       </Select>
 
-      <Select value={filters.status || 'all_statuses'} onValueChange={(v) => setFilter('status', v === 'all_statuses' ? '' : v)}>
-        <SelectTrigger className="w-[140px] h-9 text-sm"><SelectValue placeholder="Estado" /></SelectTrigger>
+      <Select value={filters.status || '_all'} onValueChange={(v) => setFilter('status', v === '_all' ? '' : v)}>
+        <SelectTrigger className="w-[130px] h-9 text-sm"><SelectValue placeholder="Estado" /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="all_statuses">Todos</SelectItem>
+          <SelectItem value="_all">Todos</SelectItem>
           <SelectItem value="pending">Pendiente</SelectItem>
           <SelectItem value="approved">Aprobado</SelectItem>
           <SelectItem value="discarded">Descartado</SelectItem>
@@ -325,13 +339,13 @@ function FilterBar() {
       </Select>
 
       {stats && stats.labels.length > 0 && (
-        <Select value={filters.label || 'all_labels'} onValueChange={(v) => setFilter('label', v === 'all_labels' ? '' : v)}>
-          <SelectTrigger className="w-[140px] h-9 text-sm">
+        <Select value={filters.label || '_all'} onValueChange={(v) => setFilter('label', v === '_all' ? '' : v)}>
+          <SelectTrigger className="w-[130px] h-9 text-sm">
             <Tag className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
             <SelectValue placeholder="Etiqueta" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all_labels">Todas</SelectItem>
+            <SelectItem value="_all">Todas</SelectItem>
             {stats.labels.map((l) => (<SelectItem key={l} value={l}>{l}</SelectItem>))}
           </SelectContent>
         </Select>
@@ -339,8 +353,8 @@ function FilterBar() {
 
       <button
         onClick={() => setFilter('sortOrder', filters.sortOrder === 'asc' ? 'desc' : 'asc')}
-        className="flex items-center gap-1 h-9 px-3 rounded-md border border-input bg-background text-sm hover:bg-muted/50 transition-colors"
-        title="Cambiar orden"
+        className="flex items-center gap-1 h-9 px-3 rounded-md border border-input bg-background text-sm hover:bg-muted/50"
+        title="Orden"
       >
         <ArrowUpDown className="h-3.5 w-3.5" />
         {filters.sortOrder === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -364,71 +378,62 @@ function EntryRow({ entry, onPreview, onStatusChange }: {
   onPreview: () => void;
   onStatusChange: (id: string, status: string) => void;
 }) {
-  const typeConfig = TYPE_CONFIG[entry.entryType] || TYPE_CONFIG.POST;
+  const typeCfg = TYPE_CONFIG[entry.entryType] || TYPE_CONFIG.POST;
   const labels: string[] = JSON.parse(entry.labels || '[]');
   const issues: { type: string; message: string; count?: number }[] = JSON.parse(entry.issues || '[]');
 
   return (
     <div
-      className={`group flex items-start gap-3 p-3 rounded-lg border transition-all duration-150 cursor-pointer relative
-        hover:border-amber-300 dark:hover:border-amber-700
-        ${entry.status === 'discarded' ? 'opacity-50 hover:opacity-100' : ''}
-        ${entry.status === 'approved' ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/30 dark:bg-emerald-950/10' : 'border-border'}`}
+      className="group flex items-start gap-2.5 px-3 py-2.5 rounded-lg border border-border/50
+        hover:border-amber-500/30 hover:bg-muted/20 cursor-pointer transition-colors
+        data-row"
       onClick={onPreview}
     >
-      {/* Status dropdown — stops propagation so it doesn't open the preview */}
-      <div className="mt-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-        <StatusDropdown
-          currentStatus={entry.status}
-          onChange={(status) => onStatusChange(entry.id, status)}
-          size="sm"
-        />
+      <div className="pt-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <StatusDot status={entry.status} onChange={(s) => onStatusChange(entry.id, s)} />
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium ${typeConfig.color}`}>
-            {typeConfig.icon} {typeConfig.label}
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${typeCfg.color}`}>
+            {typeCfg.icon} {typeCfg.label}
           </span>
-          <h3 className="text-sm font-medium truncate">{entry.title}</h3>
+          <span className="text-sm font-medium truncate">{entry.title}</span>
         </div>
-        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
           <span>{formatShortDate(entry.publishedAt)}</span>
-          {entry.author && <span>· {entry.author}</span>}
-          <span>· {entry.wordCount.toLocaleString('es-AR')} palabras</span>
+          {entry.author && <span>{entry.author}</span>}
+          <span>{entry.wordCount.toLocaleString('es-AR')} pal.</span>
         </div>
         {labels.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {labels.slice(0, 4).map((l) => (<span key={l} className="px-1.5 py-0.5 rounded bg-muted text-[10px] text-muted-foreground">{l}</span>))}
-            {labels.length > 4 && <span className="px-1.5 py-0.5 text-[10px] text-muted-foreground">+{labels.length - 4}</span>}
+          <div className="flex flex-wrap gap-1 mt-1">
+            {labels.slice(0, 3).map((l) => (
+              <span key={l} className="px-1.5 py-px rounded bg-muted text-[9px] text-muted-foreground">{l}</span>
+            ))}
+            {labels.length > 3 && <span className="text-[9px] text-muted-foreground">+{labels.length - 3}</span>}
           </div>
         )}
       </div>
 
-      {/* Issue badges — specific icons and colors */}
+      {/* Issue badges */}
       {issues.length > 0 && (
-        <div className="flex-shrink-0 mt-0.5 flex flex-col items-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex-shrink-0 flex flex-col items-end gap-0.5 pt-0.5" onClick={(e) => e.stopPropagation()}>
           {issues.slice(0, 3).map((issue, i) => {
-            const issueIcon = ISSUE_ICONS[issue.type] || ISSUE_ICONS.no_title;
+            const ic = ISSUE_CONFIG[issue.type];
             return (
               <div key={i} className="flex items-center gap-1" title={issue.message}>
-                <span className={`${issueIcon.color}`}>{issueIcon.icon}</span>
-                {issue.count && issue.count > 1 && (
-                  <span className="text-[10px] font-semibold text-muted-foreground">{issue.count}</span>
-                )}
+                <span className={ic?.color || 'text-amber-500'}>{ic?.icon || <AlertTriangle className="h-3 w-3" />}</span>
+                {issue.count && issue.count > 1 && <span className="text-[9px] font-medium text-muted-foreground">{issue.count}</span>}
               </div>
             );
           })}
-          {issues.length > 3 && (
-            <span className="text-[10px] text-muted-foreground">+{issues.length - 3}</span>
-          )}
         </div>
       )}
     </div>
   );
 }
 
-// ── Entry List ─────────────────────────────────────────────────────────────
+// ── Entry List (with proper pagination) ────────────────────────────────────
 
 function EntryList() {
   const { filters, setFilter, isLoading } = useAppStore();
@@ -437,7 +442,7 @@ function EntryList() {
   const [total, setTotal] = React.useState(0);
   const { toast } = useToast();
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false;
     const load = async () => {
       const f = useAppStore.getState().filters;
@@ -450,7 +455,6 @@ function EntryList() {
       params.set('sortOrder', f.sortOrder);
       params.set('page', String(f.page));
       params.set('limit', '50');
-
       try {
         const res = await fetch(`/api/entries?${params}`);
         const data = await res.json();
@@ -460,7 +464,7 @@ function EntryList() {
           setTotal(data.pagination?.total || 0);
         }
       } catch {
-        if (!cancelled) toast({ title: 'Error al cargar entradas', variant: 'destructive' });
+        if (!cancelled) toast({ title: 'Error al cargar', variant: 'destructive' });
       }
     };
     load();
@@ -480,8 +484,12 @@ function EntryList() {
     params.set('limit', '50');
     fetch(`/api/entries?${params}`)
       .then(r => r.json())
-      .then(data => { setEntries(data.entries || []); setTotalPages(data.pagination?.totalPages || 1); setTotal(data.pagination?.total || 0); })
-      .catch(() => toast({ title: 'Error al cargar entradas', variant: 'destructive' }));
+      .then(data => {
+        setEntries(data.entries || []);
+        setTotalPages(data.pagination?.totalPages || 1);
+        setTotal(data.pagination?.total || 0);
+      })
+      .catch(() => {});
   };
 
   const handleStatusChange = async (id: string, status: string) => {
@@ -490,7 +498,7 @@ function EntryList() {
       refreshEntries();
       fetch('/api/stats').then(r => r.json()).then(d => useAppStore.getState().setStats(d)).catch(() => {});
     } catch {
-      toast({ title: 'Error al cambiar estado', variant: 'destructive' });
+      toast({ title: 'Error', variant: 'destructive' });
     }
   };
 
@@ -502,57 +510,83 @@ function EntryList() {
       const data = await res.json();
       useAppStore.getState().setSelectedEntry(data);
     } catch {
-      toast({ title: 'Error al cargar vista previa', variant: 'destructive' });
+      toast({ title: 'Error al cargar', variant: 'destructive' });
     }
   };
 
   if (isLoading) {
-    return <div className="space-y-2 p-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>;
+    return <div className="space-y-2 p-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>;
   }
 
   return (
-    <div className="flex flex-col">
-      <div className="px-3 py-2 text-xs text-muted-foreground border-b flex items-center justify-between bg-background">
-        <span>{total} {total === 1 ? 'resultado' : 'resultados'}</span>
-        {totalPages > 1 && <span>Página {filters.page} de {totalPages}</span>}
+    <div className="rounded-lg border border-border/50 bg-card/50 overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 320px)', minHeight: '300px' }}>
+      {/* Header */}
+      <div className="px-3 py-2 text-[11px] text-muted-foreground border-b bg-card flex items-center justify-between flex-shrink-0">
+        <span>{total.toLocaleString('es-AR')} resultados</span>
+        {totalPages > 1 && <span>Pág. {filters.page} de {totalPages}</span>}
       </div>
 
-      {/* Scrollable entry list */}
-      <ScrollArea className="flex-1" style={{ maxHeight: 'calc(100vh - 380px)' }}>
-        <div className="p-2 space-y-1">
+      {/* Scrollable entries — this is the ONLY thing that scrolls */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-1.5 space-y-0.5">
           {entries.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm">No se encontraron entradas con los filtros actuales</div>
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              Sin resultados
+            </div>
           ) : (
             entries.map((entry) => (
-              <EntryRow key={entry.id} entry={entry} onPreview={() => handlePreview(entry.id)} onStatusChange={handleStatusChange} />
+              <EntryRow
+                key={entry.id}
+                entry={entry}
+                onPreview={() => handlePreview(entry.id)}
+                onStatusChange={handleStatusChange}
+              />
             ))
           )}
         </div>
-      </ScrollArea>
+      </div>
 
-      {/* Pagination — OUTSIDE the scroll area, with its own background and z-index */}
+      {/* Pagination — fixed at bottom, never scrolls */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 py-3 px-3 border-t bg-background relative z-10">
+        <div className="flex items-center justify-center gap-1.5 py-2.5 px-3 border-t bg-card flex-shrink-0">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 text-xs"
+            className="h-7 px-2"
             disabled={filters.page <= 1}
-            onClick={(e) => { e.stopPropagation(); setFilter('page', filters.page - 1); }}
+            onClick={() => setFilter('page', 1)}
           >
-            ← Anterior
+            <ChevronLeft className="h-4 w-4" /><ChevronLeft className="h-4 w-4 -ml-2" />
           </Button>
-          <span className="text-xs text-muted-foreground px-2 min-w-[60px] text-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            disabled={filters.page <= 1}
+            onClick={() => setFilter('page', filters.page - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-xs text-muted-foreground px-1 tabular-nums min-w-[70px] text-center font-medium">
             {filters.page} / {totalPages}
           </span>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 text-xs"
+            className="h-7 px-2"
             disabled={filters.page >= totalPages}
-            onClick={(e) => { e.stopPropagation(); setFilter('page', filters.page + 1); }}
+            onClick={() => setFilter('page', filters.page + 1)}
           >
-            Siguiente →
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            disabled={filters.page >= totalPages}
+            onClick={() => setFilter('page', totalPages)}
+          >
+            <ChevronRight className="h-4 w-4" /><ChevronRight className="h-4 w-4 -ml-2" />
           </Button>
         </div>
       )}
@@ -560,17 +594,55 @@ function EntryList() {
   );
 }
 
-// ── Preview Panel ──────────────────────────────────────────────────────────
+// ── Preview Modal ──────────────────────────────────────────────────────────
+
+function PreviewContent({ entry }: { entry: FullEntry }) {
+  const [showSource, setShowSource] = React.useState(false);
+
+  return (
+    <div className="flex-1 min-h-0 overflow-hidden relative">
+      {/* Toggle button */}
+      <div className="absolute top-2 right-2 z-10">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-7 text-[11px] gap-1.5 shadow-md border-border/50"
+          onClick={() => setShowSource(s => !s)}
+        >
+          {showSource ? <><Eye className="h-3 w-3" /> Preview</> : <><Code2 className="h-3 w-3" /> HTML</>}
+        </Button>
+      </div>
+
+      {/* Scrollable content area */}
+      <div className="h-full overflow-y-auto">
+        {showSource ? (
+          <pre className="p-5 pt-10 text-[11px] font-mono text-muted-foreground whitespace-pre-wrap break-all leading-relaxed">
+            {entry.content}
+          </pre>
+        ) : (
+          <div
+            className="p-5 pt-10 prose prose-sm dark:prose-invert max-w-none
+              prose-img:max-w-full prose-img:h-auto
+              prose-a:text-amber-500 hover:prose-a:text-amber-400
+              prose-headings:font-semibold
+              overflow-wrap-anywhere"
+            style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+            dangerouslySetInnerHTML={{ __html: entry.content }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
 
 function PreviewPanel() {
   const { selectedEntry, isPreviewOpen, setPreviewOpen, setSelectedEntry } = useAppStore();
   const { toast } = useToast();
-  const [showSource, setShowSource] = React.useState(false);
 
   if (!selectedEntry) return null;
 
   const entry = selectedEntry as unknown as FullEntry;
-  const typeConfig = TYPE_CONFIG[entry.entryType] || TYPE_CONFIG.POST;
+  const typeCfg = TYPE_CONFIG[entry.entryType] || TYPE_CONFIG.POST;
   const labels: string[] = JSON.parse(entry.labels || '[]');
   const issues: { type: string; message: string; count?: number }[] = JSON.parse(entry.issues || '[]');
 
@@ -580,43 +652,50 @@ function PreviewPanel() {
       setSelectedEntry({ ...entry, status });
       fetch('/api/stats').then(r => r.json()).then(d => useAppStore.getState().setStats(d)).catch(() => {});
     } catch {
-      toast({ title: 'Error al cambiar estado', variant: 'destructive' });
+      toast({ title: 'Error', variant: 'destructive' });
     }
   };
 
   return (
     <Dialog open={isPreviewOpen} onOpenChange={(open) => { if (!open) { setPreviewOpen(false); setSelectedEntry(null); } }}>
-      <DialogContent key={entry.id} className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
-        {/* Header — flex-shrink-0, never overflows */}
-        <div className="p-5 pb-3 space-y-3 flex-shrink-0">
+      <DialogContent
+        key={entry.id}
+        className="max-w-5xl w-[95vw] max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0"
+      >
+        {/* Header */}
+        <div className="p-5 pb-3 space-y-2.5 flex-shrink-0">
           <DialogHeader>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${typeConfig.color}`}>{typeConfig.icon} {typeConfig.label}</span>
-              {labels.map(l => (<Badge key={l} variant="secondary" className="text-[10px] px-1.5 py-0">{l}</Badge>))}
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${typeCfg.color}`}>
+                {typeCfg.icon} {typeCfg.label}
+              </span>
+              {labels.map(l => (
+                <Badge key={l} variant="secondary" className="text-[10px] px-1.5 py-0">{l}</Badge>
+              ))}
             </div>
-            <DialogTitle className="text-lg font-semibold leading-tight">{entry.title}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold leading-tight pr-10">{entry.title}</DialogTitle>
           </DialogHeader>
 
-          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
             <span>{formatLongDate(entry.publishedAt)}</span>
             {entry.author && <span>· {entry.author}</span>}
             <span>· {entry.wordCount.toLocaleString('es-AR')} palabras</span>
             {entry.originalUrl && (
-              <a href={entry.originalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-amber-600 hover:underline">
-                <ExternalLink className="h-3 w-3" /> Ver original
+              <a href={entry.originalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-amber-500 hover:underline">
+                <ExternalLink className="h-3 w-3" /> Original
               </a>
             )}
           </div>
 
           {issues.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {issues.map((issue, i) => {
-                const issueIcon = ISSUE_ICONS[issue.type];
+                const ic = ISSUE_CONFIG[issue.type];
                 return (
-                  <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300">
-                    {issueIcon?.icon || <AlertTriangle className="h-3 w-3 flex-shrink-0" />}
+                  <div key={i} className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-900/30 text-[11px] text-red-700 dark:text-red-300">
+                    <span className={ic?.color || 'text-amber-500'}>{ic?.icon || <AlertTriangle className="h-3 w-3" />}</span>
                     {issue.message}
-                    {issue.count && issue.count > 1 && <span className="font-semibold">({issue.count})</span>}
+                    {issue.count && issue.count > 1 && <span className="font-bold">×{issue.count}</span>}
                   </div>
                 );
               })}
@@ -624,53 +703,34 @@ function PreviewPanel() {
           )}
         </div>
 
-        <Separator />
+        <Separator className="flex-shrink-0" />
 
-        {/* Content area — takes remaining space, scrollable */}
-        <div className="flex-1 min-h-0 overflow-hidden relative">
-          {/* Toggle button — positioned absolutely over the content */}
-          <div className="absolute top-2 right-2 z-10">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs gap-1 bg-background/90 backdrop-blur border-border/50 shadow-sm"
-              onClick={() => setShowSource(!showSource)}
-            >
-              {showSource ? <><Eye className="h-3 w-3" /> Vista previa</> : <><Code2 className="h-3 w-3" /> Código fuente</>}
-            </Button>
-          </div>
+        {/* Content — takes all remaining space */}
+        <PreviewContent entry={entry} />
 
-          <ScrollArea className="h-full">
-            {showSource ? (
-              <pre className="p-5 pt-10 text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all leading-relaxed">
-                {entry.content}
-              </pre>
-            ) : (
-              <div
-                className="p-5 pt-10 prose prose-sm dark:prose-invert max-w-none
-                  prose-img:max-w-full prose-img:h-auto
-                  prose-a:text-amber-600 prose-headings:font-semibold
-                  [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:overflow-x-auto
-                  [&_code]:break-all [&_code]:word-break-break-all
-                  [&_img]:break-inside-avoid
-                  [&_*]:overflow-wrap-break-word
-                  [&_*]:word-break-break-word"
-                dangerouslySetInnerHTML={{ __html: entry.content }}
-              />
-            )}
-          </ScrollArea>
-        </div>
+        <Separator className="flex-shrink-0" />
 
-        <Separator />
-
-        {/* Footer — flex-shrink-0, always visible, with background */}
-        <div className="p-4 flex items-center gap-3 flex-shrink-0 bg-background relative z-10">
-          <span className="text-xs text-muted-foreground flex-shrink-0">Estado:</span>
-          <StatusDropdown
-            currentStatus={entry.status}
-            onChange={handleStatusChange}
-            size="default"
-          />
+        {/* Footer — always visible */}
+        <div className="p-3 px-5 flex items-center gap-3 flex-shrink-0 bg-card z-10">
+          <span className="text-[11px] text-muted-foreground">Estado:</span>
+          <Select value={entry.status} onValueChange={handleStatusChange}>
+            <SelectTrigger className="h-8 w-44 text-xs gap-2">
+              <div className="flex items-center gap-2">
+                <div className={`w-2.5 h-2.5 rounded-full ${STATUS_CONFIG[entry.status]?.dotClass || ''}`} />
+                <SelectValue />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(STATUS_CONFIG).map(([key, c]) => (
+                <SelectItem key={key} value={key} className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2.5 h-2.5 rounded-full ${c.dotClass}`} />
+                    {c.label}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </DialogContent>
     </Dialog>
@@ -684,92 +744,38 @@ function ExportButtons() {
 
   const doExport = async (format: string, status: string) => {
     try {
-      const params = new URLSearchParams({ format, status });
-      const res = await fetch(`/api/export?${params}`);
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Error al exportar');
-      }
+      const res = await fetch(`/api/export?${new URLSearchParams({ format, status })}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = URL.createObjectURL(blob);
       a.download = `curador-export.${format === 'markdown' ? 'md' : format}`;
       a.click();
-      URL.revokeObjectURL(url);
-      toast({ title: 'Exportación descargada' });
+      URL.revokeObjectURL(a.href);
+      toast({ title: 'Exportado' });
     } catch (err) {
-      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Error al exportar', variant: 'destructive' });
+      toast({ title: 'Error', description: err instanceof Error ? err.message : '', variant: 'destructive' });
     }
   };
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-1.5">
       <Select onValueChange={(v) => doExport(v, 'approved')}>
-        <SelectTrigger className="w-auto h-9 text-sm gap-2">
+        <SelectTrigger className="h-8 text-[11px] gap-1.5">
           <Download className="h-3.5 w-3.5" />
-          <SelectValue placeholder="Exportar aprobados..." />
+          <SelectValue placeholder="Aprobados" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="json"><span className="flex items-center gap-2"><FileJson className="h-3.5 w-3.5" /> JSON (Supabase)</span></SelectItem>
+          <SelectItem value="json"><span className="flex items-center gap-2"><FileJson className="h-3.5 w-3.5" /> JSON</span></SelectItem>
           <SelectItem value="markdown"><span className="flex items-center gap-2"><FileDown className="h-3.5 w-3.5" /> Markdown</span></SelectItem>
-          <SelectItem value="html"><span className="flex items-center gap-2"><Globe className="h-3.5 w-3.5" /> HTML (visual)</span></SelectItem>
-        </SelectContent>
-      </Select>
-
-      <Select onValueChange={(v) => doExport(v, 'pending')}>
-        <SelectTrigger className="w-auto h-9 text-sm gap-2">
-          <Download className="h-3.5 w-3.5 text-amber-500" />
-          <SelectValue placeholder="Exportar pendientes..." />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="json">JSON (Supabase)</SelectItem>
-          <SelectItem value="markdown">Markdown</SelectItem>
-          <SelectItem value="html">HTML (visual)</SelectItem>
+          <SelectItem value="html"><span className="flex items-center gap-2"><Globe className="h-3.5 w-3.5" /> HTML</span></SelectItem>
         </SelectContent>
       </Select>
     </div>
   );
 }
 
-// ── Bulk Actions ───────────────────────────────────────────────────────────
-
-function BulkActions({ onDone }: { onDone: () => void }) {
-  const { toast } = useToast();
-
-  const handleBulkStatus = async (status: string) => {
-    try {
-      const res = await fetch('/api/entries', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: 'ALL_CURRENT_FILTERS', status }),
-      });
-      const data = await res.json();
-      toast({ title: `${data.updated || 'Todas las'} entradas marcadas como "${STATUS_CONFIG[status]?.label || status}"` });
-      onDone();
-    } catch {
-      toast({ title: 'Error en acción masiva', variant: 'destructive' });
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <Select onValueChange={(v) => handleBulkStatus(v)}>
-        <SelectTrigger className="h-8 text-xs gap-1">
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-          <SelectValue placeholder="Acción masiva..." />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="approved">Aprobar todos (posts/páginas)</SelectItem>
-          <SelectItem value="discarded">Descartar todos</SelectItem>
-          <SelectItem value="pending">Marcar todos como pendiente</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
-
-// ── Dashboard View ─────────────────────────────────────────────────────────
+// ── Dashboard ──────────────────────────────────────────────────────────────
 
 function DashboardView() {
   const { stats, setStats, resetAll, uploadResult, filters } = useAppStore();
@@ -782,72 +788,152 @@ function DashboardView() {
       setStats(data);
       if (data.total === 0) resetAll();
     } catch {
-      toast({ title: 'Error al cargar estadísticas', variant: 'destructive' });
+      toast({ title: 'Error', variant: 'destructive' });
     }
   }, [setStats, resetAll, toast]);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
-  // Default: exclude comments on first load
-  useEffect(() => {
-    if (stats && stats.comments > 0 && !filters.type) {
-      // Don't auto-filter if user already set a filter
-      // Just show the counts so user can decide
+  const handleBulkAction = async (action: string) => {
+    try {
+      let body: Record<string, unknown>;
+      if (action === 'DISCARD_COMMENTS') {
+        body = { ids: 'DISCARD_ALL_COMMENTS', status: 'discarded' };
+      } else {
+        // Apply to current filter, defaulting to non-comments if no filter
+        body = {
+          ids: 'ALL_FILTERED',
+          status: action,
+          filter: {
+            type: filters.type || undefined,
+            status: filters.status || undefined,
+            label: filters.label || undefined,
+            search: filters.search || undefined,
+          },
+        };
+      }
+      const res = await fetch('/api/entries', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      toast({ title: `${data.updated} entradas actualizadas` });
+      fetchStats();
+    } catch {
+      toast({ title: 'Error', variant: 'destructive' });
     }
-  }, [stats, filters.type]);
+  };
 
   const handleReset = async () => {
     try {
       await fetch('/api/reset', { method: 'POST' });
       resetAll();
-      toast({ title: 'Datos eliminados', description: 'Podés importar un nuevo archivo' });
+      toast({ title: 'Datos eliminados' });
     } catch {
-      toast({ title: 'Error al reiniciar', variant: 'destructive' });
+      toast({ title: 'Error', variant: 'destructive' });
     }
   };
 
+  const currentFilterLabel = filters.type
+    ? (TYPE_CONFIG[filters.type]?.label || filters.type).toLowerCase() + 's'
+    : 'posts y páginas';
+
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b bg-background/95 backdrop-blur sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+    <div className="h-screen flex flex-col overflow-hidden">
+      {/* Header */}
+      <header className="border-b bg-card/80 backdrop-blur-md flex-shrink-0 z-30">
+        <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold"><span className="text-amber-600">Curador</span></h1>
-            {uploadResult && <span className="hidden sm:inline text-xs text-muted-foreground">{uploadResult.blogTitle}</span>}
+            <h1 className="text-base font-bold"><span className="text-amber-500">Curador</span></h1>
+            {uploadResult && (
+              <span className="hidden sm:inline text-xs text-muted-foreground border-l border-border pl-3">
+                {uploadResult.blogTitle}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
             <ExportButtons />
-            <BulkActions onDone={fetchStats} />
+
+            {/* Bulk actions */}
+            <Select onValueChange={handleBulkAction}>
+              <SelectTrigger className="h-8 text-[11px] gap-1.5 w-auto">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                <SelectValue placeholder="Bulk..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="approved">Aprobar {currentFilterLabel}</SelectItem>
+                <SelectItem value="pending">Pendiente {currentFilterLabel}</SelectItem>
+                <SelectItem value="discarded">Descartar {currentFilterLabel}</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Discard all comments */}
+            {stats && stats.comments > 0 && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 text-[11px] gap-1 text-red-500 hover:text-red-400 hover:bg-red-500/10">
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Descartar {stats.comments.toLocaleString('es-AR')} comentarios
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Descartar todos los comentarios</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Se van a marcar {stats.comments.toLocaleString('es-AR')} comentarios como descartados.
+                      Los posts no se ven afectados.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleBulkAction('DISCARD_COMMENTS')} className="bg-red-600 text-white hover:bg-red-700">
+                      Sí, descartar todos
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-destructive hover:text-destructive">
+                <Button variant="ghost" size="sm" className="h-8 text-[11px] gap-1 text-destructive hover:text-destructive">
                   <RotateCcw className="h-3.5 w-3.5" /> Nueva importación
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Nueva importación</AlertDialogTitle>
-                  <AlertDialogDescription>Esto va a eliminar todos los datos actuales. Esta acción no se puede deshacer.</AlertDialogDescription>
+                  <AlertDialogDescription>Se eliminan todos los datos. No se puede deshacer.</AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleReset} className="bg-destructive text-white hover:bg-destructive/90">Sí, eliminar todo</AlertDialogAction>
+                  <AlertDialogAction onClick={handleReset} className="bg-destructive text-white hover:bg-destructive/90">
+                    Eliminar todo
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-4 space-y-4">
-        <StatsBar />
-        <FilterBar />
-        <EntryList />
+      {/* Main content */}
+      <main className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-6xl mx-auto px-4 py-4 space-y-3">
+          <StatsBar />
+          <FilterBar />
+          <EntryList />
+        </div>
       </main>
 
-      <footer className="border-t py-3 mt-auto bg-background">
-        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Curador — Herramienta de migración desde Blogger</span>
-          {stats && <span>{stats.totalWords.toLocaleString('es-AR')} palabras totales</span>}
+      {/* Footer — fixed at bottom */}
+      <footer className="border-t py-2 bg-card/80 backdrop-blur-md flex-shrink-0">
+        <div className="max-w-6xl mx-auto px-4 flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>Curador — Migración desde Blogger</span>
+          {stats && <span>{stats.totalWords.toLocaleString('es-AR')} palabras en posts</span>}
         </div>
       </footer>
 
@@ -856,7 +942,7 @@ function DashboardView() {
   );
 }
 
-// ── Main Page ──────────────────────────────────────────────────────────────
+// ── Main ───────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const { view } = useAppStore();
@@ -880,11 +966,6 @@ export default function Home() {
       <main className="flex-1">
         {view === 'upload' ? <UploadView /> : <DashboardView />}
       </main>
-      {view === 'upload' && (
-        <footer className="border-t py-3 mt-auto">
-          <div className="text-center text-xs text-muted-foreground">Curador — Herramienta de curaduría para migración desde Blogger</div>
-        </footer>
-      )}
     </div>
   );
 }

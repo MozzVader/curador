@@ -19,7 +19,6 @@ export async function GET(request: NextRequest) {
   if (type) where.entryType = type;
   if (status) where.status = status;
   if (label) {
-    // SQLite JSON search: labels contains the label string
     where.labels = { contains: label };
   }
   if (search) {
@@ -29,7 +28,6 @@ export async function GET(request: NextRequest) {
     ];
   }
 
-  // Build the orderBy
   const orderBy: Record<string, string> = {};
   const validSortFields = ['publishedAt', 'title', 'wordCount', 'commentCount', 'createdAt'];
   if (validSortFields.includes(sortBy)) {
@@ -38,7 +36,6 @@ export async function GET(request: NextRequest) {
     orderBy.publishedAt = 'desc';
   }
 
-  // Handle null publishedAt for sorting: put nulls at the end
   const skip = (page - 1) * limit;
 
   const [entries, total] = await Promise.all([
@@ -66,12 +63,7 @@ export async function GET(request: NextRequest) {
 
   const response = NextResponse.json({
     entries,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
   response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   return response;
@@ -80,7 +72,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ids, status } = body;
+    const { ids, status, filter } = body;
 
     if (!status) {
       return NextResponse.json({ error: 'Se requiere status' }, { status: 400 });
@@ -91,23 +83,34 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Status inválido' }, { status: 400 });
     }
 
-    let result;
+    let where: Record<string, unknown> = {};
 
-    if (ids === 'ALL' || ids === 'ALL_CURRENT_FILTERS') {
-      // Update ALL entries (exclude comments for bulk approve)
-      const where = ids === 'ALL_CURRENT_FILTERS'
-        ? { entryType: { not: 'COMMENT' } }
-        : {};
-      result = await db.blogEntry.updateMany({ where, data: { status } });
+    if (ids === 'ALL_FILTERED') {
+      // Use the same filter as the current view, excluding comments only if filter is empty
+      if (filter) {
+        if (filter.type) where.entryType = filter.type;
+        if (filter.status) where.status = filter.status;
+        if (filter.label) where.labels = { contains: filter.label };
+        if (filter.search) {
+          where.OR = [
+            { title: { contains: filter.search } },
+            { content: { contains: filter.search } },
+          ];
+        }
+      } else {
+        // No filter specified: apply to non-comments only
+        where.entryType = { not: 'COMMENT' };
+      }
+    } else if (ids === 'DISCARD_ALL_COMMENTS') {
+      // Special case: discard all comments regardless of current filter
+      where.entryType = 'COMMENT';
     } else if (Array.isArray(ids)) {
-      result = await db.blogEntry.updateMany({
-        where: { id: { in: ids } },
-        data: { status },
-      });
+      where = { id: { in: ids } };
     } else {
-      return NextResponse.json({ error: 'ids debe ser un array o "ALL"' }, { status: 400 });
+      return NextResponse.json({ error: 'ids inválido' }, { status: 400 });
     }
 
+    const result = await db.blogEntry.updateMany({ where, data: { status } });
     return NextResponse.json({ updated: result.count });
   } catch (error) {
     console.error('Batch update error:', error);
