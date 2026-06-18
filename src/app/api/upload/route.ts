@@ -75,7 +75,6 @@ export async function POST(request: NextRequest) {
       await tx.blogEntry.deleteMany({});
       await tx.blogEntry.createMany({
         data: entriesToCreate,
-        skipDuplicates: true,
       });
     });
 
