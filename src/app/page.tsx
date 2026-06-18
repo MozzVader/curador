@@ -741,7 +741,7 @@ function PreviewPanel() {
 const EXPORT_STATUS_OPTIONS = [
   { value: 'all', label: 'Todos' },
   { value: 'approved', label: 'Aprobados' },
-  { value: 'pending_review', label: 'Pendientes' },
+  { value: 'pending', label: 'Pendientes' },
   { value: 'discarded', label: 'Descartados' },
 ] as const;
 

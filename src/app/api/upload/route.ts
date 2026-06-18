@@ -45,38 +45,41 @@ export async function POST(request: NextRequest) {
     console.log(`[UPLOAD] First 3 titles:`, result.entries.slice(0, 3).map(e => `"${e.title}" (${e.entryType})`));
     console.log(`[UPLOAD] Skipped:`, JSON.stringify(result.skippedTypes));
 
-    // Clear previous data for a fresh import
-    await db.blogEntry.deleteMany({});
-
-    // Store entries in the database
-    let storedCount = 0;
-    for (const entry of result.entries) {
+    // Prepare all entries data before touching the database
+    const entriesToCreate = result.entries.map(entry => {
       const issues = detectIssues(entry.content, entry.title, entry.entryType);
+      return {
+        entryId: entry.entryId,
+        entryType: entry.entryType,
+        title: entry.title || 'Sin título',
+        content: entry.content,
+        publishedAt: entry.publishedAt,
+        atomUpdated: entry.atomUpdated,
+        author: entry.author,
+        labels: JSON.stringify(entry.labels),
+        originalUrl: entry.originalUrl,
+        status: 'pending' as const,
+        issues: JSON.stringify(issues),
+        wordCount: entry.content
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
+          .split(/\s+/)
+          .filter(w => w.length > 0).length,
+        commentCount: entry.commentCount,
+        parentId: entry.parentId,
+      };
+    });
 
-      await db.blogEntry.create({
-        data: {
-          entryId: entry.entryId,
-          entryType: entry.entryType,
-          title: entry.title || 'Sin título',
-          content: entry.content,
-          publishedAt: entry.publishedAt,
-          atomUpdated: entry.atomUpdated,
-          author: entry.author,
-          labels: JSON.stringify(entry.labels),
-          originalUrl: entry.originalUrl,
-          status: 'pending',
-          issues: JSON.stringify(issues),
-          wordCount: entry.content
-            .replace(/<[^>]*>/g, ' ')
-            .replace(/&nbsp;/g, ' ')
-            .split(/\s+/)
-            .filter(w => w.length > 0).length,
-          commentCount: entry.commentCount,
-          parentId: entry.parentId,
-        },
+    // Atomic operation: delete old data and insert new data in a single transaction
+    await db.$transaction(async (tx) => {
+      await tx.blogEntry.deleteMany({});
+      await tx.blogEntry.createMany({
+        data: entriesToCreate,
+        skipDuplicates: true,
       });
-      storedCount++;
-    }
+    });
+
+    const storedCount = entriesToCreate.length;
 
     console.log(`[UPLOAD] Stored ${storedCount} entries in DB`);
 
