@@ -596,47 +596,10 @@ function EntryList() {
 
 // ── Preview Modal ──────────────────────────────────────────────────────────
 
-function PreviewContent({ entry }: { entry: FullEntry }) {
-  const [showSource, setShowSource] = React.useState(false);
-
-  return (
-    <div className="flex-1 min-h-0 relative">
-      {/* Toggle button */}
-      <div className="absolute top-2 right-2 z-10">
-        <Button
-          variant="secondary"
-          size="sm"
-          className="h-7 text-[11px] gap-1.5 shadow-md border-border/50"
-          onClick={() => setShowSource(s => !s)}
-        >
-          {showSource ? <><Eye className="h-3 w-3" /> Preview</> : <><Code2 className="h-3 w-3" /> HTML</>}
-        </Button>
-      </div>
-
-      {/* Scrollable content area — absolute to fill flex-constrained parent */}
-      <div className="absolute inset-0 overflow-y-auto">
-        {showSource ? (
-          <pre className="p-5 pt-10 text-[11px] font-mono text-muted-foreground whitespace-pre-wrap break-all leading-relaxed">
-            {entry.content}
-          </pre>
-        ) : (
-          <div
-            className="p-5 pt-10 prose prose-sm dark:prose-invert max-w-none
-              prose-img:max-w-full prose-img:h-auto
-              prose-a:text-amber-500 hover:prose-a:text-amber-400
-              prose-headings:font-semibold"
-            style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
-            dangerouslySetInnerHTML={{ __html: entry.content }}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
 function PreviewPanel() {
   const { selectedEntry, isPreviewOpen, setPreviewOpen, setSelectedEntry } = useAppStore();
   const { toast } = useToast();
+  const [showSource, setShowSource] = React.useState(false);
 
   if (!selectedEntry) return null;
 
@@ -656,80 +619,116 @@ function PreviewPanel() {
   };
 
   return (
-    <Dialog open={isPreviewOpen} onOpenChange={(open) => { if (!open) { setPreviewOpen(false); setSelectedEntry(null); } }}>
+    <Dialog open={isPreviewOpen} onOpenChange={(open) => { if (!open) { setPreviewOpen(false); setSelectedEntry(null); setShowSource(false); } }}>
       <DialogContent
         key={entry.id}
-        className="max-w-7xl w-[95vw] max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0"
+        /* Grid layout: row 1 = header (auto), row 2 = content (1fr), row 3 = footer (auto)
+           With Grid, 1fr resolves to the remaining space even when the container has only max-height.
+           This is the key difference from Flexbox where flex:1 + min-h:0 often fails to activate overflow. */
+        className="w-[95vw] max-w-7xl sm:max-w-7xl max-h-[92vh] overflow-hidden grid-rows-[auto_1fr_auto] p-0 gap-0"
       >
-        {/* Header */}
-        <div className="p-5 pb-3 space-y-2.5 flex-shrink-0">
-          <DialogHeader>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${typeCfg.color}`}>
-                {typeCfg.icon} {typeCfg.label}
-              </span>
-              {labels.map(l => (
-                <Badge key={l} variant="secondary" className="text-[10px] px-1.5 py-0">{l}</Badge>
-              ))}
-            </div>
-            <DialogTitle className="text-lg font-semibold leading-tight pr-10">{entry.title}</DialogTitle>
-          </DialogHeader>
+        {/* ── Row 1: Header (auto-sized) ── */}
+        <div className="overflow-hidden">
+          <div className="p-5 pb-3 space-y-2.5">
+            <DialogHeader>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${typeCfg.color}`}>
+                  {typeCfg.icon} {typeCfg.label}
+                </span>
+                {labels.map(l => (
+                  <Badge key={l} variant="secondary" className="text-[10px] px-1.5 py-0">{l}</Badge>
+                ))}
+              </div>
+              <DialogTitle className="text-lg font-semibold leading-tight pr-10">{entry.title}</DialogTitle>
+            </DialogHeader>
 
-          <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
-            <span>{formatLongDate(entry.publishedAt)}</span>
-            {entry.author && <span>· {entry.author}</span>}
-            <span>· {entry.wordCount.toLocaleString('es-AR')} palabras</span>
-            {entry.originalUrl && (
-              <a href={entry.originalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-amber-500 hover:underline">
-                <ExternalLink className="h-3 w-3" /> Original
-              </a>
+            <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
+              <span>{formatLongDate(entry.publishedAt)}</span>
+              {entry.author && <span>· {entry.author}</span>}
+              <span>· {entry.wordCount.toLocaleString('es-AR')} palabras</span>
+              {entry.originalUrl && (
+                <a href={entry.originalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-amber-500 hover:underline">
+                  <ExternalLink className="h-3 w-3" /> Original
+                </a>
+              )}
+            </div>
+
+            {issues.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {issues.map((issue, i) => {
+                  const ic = ISSUE_CONFIG[issue.type];
+                  return (
+                    <div key={i} className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-900/30 text-[11px] text-red-700 dark:text-red-300">
+                      <span className={ic?.color || 'text-amber-500'}>{ic?.icon || <AlertTriangle className="h-3 w-3" />}</span>
+                      {issue.message}
+                      {issue.count && issue.count > 1 && <span className="font-bold">×{issue.count}</span>}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
+          <Separator />
+        </div>
 
-          {issues.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {issues.map((issue, i) => {
-                const ic = ISSUE_CONFIG[issue.type];
-                return (
-                  <div key={i} className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-900/30 text-[11px] text-red-700 dark:text-red-300">
-                    <span className={ic?.color || 'text-amber-500'}>{ic?.icon || <AlertTriangle className="h-3 w-3" />}</span>
-                    {issue.message}
-                    {issue.count && issue.count > 1 && <span className="font-bold">×{issue.count}</span>}
-                  </div>
-                );
-              })}
-            </div>
+        {/* ── Row 2: Content (1fr — gets remaining space, scrollable) ── */}
+        <div
+          /* min-h-0 is critical: without it the grid item won't shrink below content height
+             and overflow-y won't activate */
+          className="min-h-0 overflow-y-auto relative"
+        >
+          {/* Toggle button — absolute so it doesn't affect layout */}
+          <div className="absolute top-2 right-2 z-10">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 text-[11px] gap-1.5 shadow-md border-border/50"
+              onClick={() => setShowSource(s => !s)}
+            >
+              {showSource ? <><Eye className="h-3 w-3" /> Preview</> : <><Code2 className="h-3 w-3" /> HTML</>}
+            </Button>
+          </div>
+
+          {showSource ? (
+            <pre className="p-5 pt-10 text-[11px] font-mono text-muted-foreground whitespace-pre-wrap break-all leading-relaxed">
+              {entry.content}
+            </pre>
+          ) : (
+            <div
+              className="p-5 pt-10 prose prose-sm dark:prose-invert max-w-none
+                prose-img:max-w-full prose-img:h-auto
+                prose-a:text-amber-500 hover:prose-a:text-amber-400
+                prose-headings:font-semibold"
+              style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+              dangerouslySetInnerHTML={{ __html: entry.content }}
+            />
           )}
         </div>
 
-        <Separator className="flex-shrink-0" />
-
-        {/* Content — takes all remaining space */}
-        <PreviewContent entry={entry} />
-
-        <Separator className="flex-shrink-0" />
-
-        {/* Footer — always visible */}
-        <div className="p-3 px-5 flex items-center gap-3 flex-shrink-0 bg-card z-10">
-          <span className="text-[11px] text-muted-foreground">Estado:</span>
-          <Select value={entry.status} onValueChange={handleStatusChange}>
-            <SelectTrigger className="h-8 w-44 text-xs gap-2">
-              <div className="flex items-center gap-2">
-                <div className={`w-2.5 h-2.5 rounded-full ${STATUS_CONFIG[entry.status]?.dotClass || ''}`} />
-                <SelectValue />
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(STATUS_CONFIG).map(([key, c]) => (
-                <SelectItem key={key} value={key} className="text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2.5 h-2.5 rounded-full ${c.dotClass}`} />
-                    {c.label}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* ── Row 3: Footer (auto-sized) ── */}
+        <div className="overflow-hidden">
+          <Separator />
+          <div className="p-3 px-5 flex items-center gap-3 bg-card">
+            <span className="text-[11px] text-muted-foreground">Estado:</span>
+            <Select value={entry.status} onValueChange={handleStatusChange}>
+              <SelectTrigger className="h-8 w-44 text-xs gap-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2.5 h-2.5 rounded-full ${STATUS_CONFIG[entry.status]?.dotClass || ''}`} />
+                  <SelectValue />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(STATUS_CONFIG).map(([key, c]) => (
+                  <SelectItem key={key} value={key} className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2.5 h-2.5 rounded-full ${c.dotClass}`} />
+                      {c.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
