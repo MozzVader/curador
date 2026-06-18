@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logo.svg" alt="AtomCleaner" width="80" height="80" />
+  <img src="public/logo.png" alt="AtomCleaner" width="80" height="80" />
 </p>
 
 <h1 align="center">AtomCleaner</h1>
