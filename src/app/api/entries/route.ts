@@ -17,7 +17,13 @@ export async function GET(request: NextRequest) {
   const where: Record<string, unknown> = {};
 
   if (type) where.entryType = type;
-  if (status) where.status = status;
+  if (status) {
+    if (status.includes('+')) {
+      where.status = { in: status.split('+') };
+    } else {
+      where.status = status;
+    }
+  }
   if (label) {
     where.labels = { contains: label };
   }

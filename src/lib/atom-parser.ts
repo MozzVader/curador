@@ -318,6 +318,47 @@ export function parseAtomXml(xmlString: string): ParseResult {
     }
   }
 
+  // ── Validate/correct blogUrl from entry-level links ──
+  // The feed-level blogUrl can be wrong (e.g. cocoluchi.blogspot.com when the
+  // actual posts are on dosminutosmas.blogspot.com). Cross-check against the
+  // first few POST entries that have their own <link rel="alternate">.
+  if (blogUrl) {
+    let correctedDomain: string | null = null;
+    for (const rawEntry of feedEntries.slice(0, 20)) {
+      const e = rawEntry as Record<string, unknown>;
+      const eType = String(getFromKeys(e, ['blogger:type', 'type']) ?? '').toUpperCase();
+      if (eType !== 'POST') continue;
+      const eLinks: unknown[] = Array.isArray(e.link) ? e.link : [];
+      for (const l of eLinks) {
+        const link = l as Record<string, unknown>;
+        const rel = String(link['@_rel'] || '');
+        const href = String(link['@_href'] || '');
+        if (rel === 'alternate' && href && href.startsWith('http') && href.includes('blogspot.com')) {
+          try {
+            const entryDomain = new URL(href).hostname;
+            if (correctedDomain && correctedDomain !== entryDomain) {
+              // Conflicting domains — entries disagree, keep feed-level
+              correctedDomain = null;
+              break;
+            }
+            correctedDomain = entryDomain;
+          } catch { /* skip malformed URLs */ }
+          break;
+        }
+      }
+      if (correctedDomain === null) break; // conflict detected, stop
+    }
+    // If a consistent entry-level domain was found and differs from feed, correct it
+    if (correctedDomain) {
+      try {
+        const feedDomain = new URL(blogUrl).hostname;
+        if (feedDomain !== correctedDomain) {
+          blogUrl = `https://${correctedDomain}/`;
+        }
+      } catch { /* keep original blogUrl */ }
+    }
+  }
+
   // If still no blogUrl, try to extract it from post content
   // Look for blogspot.com URLs in the first few POST entries
   if (!blogUrl) {

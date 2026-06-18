@@ -17,7 +17,11 @@ export async function GET(request: NextRequest) {
 
   // Allow filtering by status; "all" means no status filter
   if (status && status !== 'all') {
-    where.status = status;
+    if (status.includes('+')) {
+      where.status = { in: status.split('+') };
+    } else {
+      where.status = status;
+    }
   }
 
   // Museum format needs extra fields
@@ -27,6 +31,7 @@ export async function GET(request: NextRequest) {
     where,
     orderBy: { publishedAt: 'desc' },
     select: {
+      id: isMuseum ? true : false,
       title: true,
       content: true,
       publishedAt: true,

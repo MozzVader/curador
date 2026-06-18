@@ -623,6 +623,17 @@ function PreviewPanel() {
   const labels: string[] = JSON.parse(entry.labels || '[]');
   const issues: { type: string; message: string; count?: number }[] = JSON.parse(entry.issues || '[]');
   const platforms: string[] = JSON.parse(entry.platforms || '[]');
+  // Fallback platform tags for display consistency (same logic as exporter)
+  const displayPlatforms = platforms.length > 0
+    ? platforms.map(p => p.toLowerCase())
+    : (() => {
+        const fb: string[] = [];
+        const c = entry.content || '';
+        if (/youtube\.com|youtu\.be/i.test(c)) fb.push('youtube');
+        if (/<img[^>]+src=/i.test(c) || /<a[^>]+imageanchor/i.test(c)) fb.push('imagenes');
+        if (!fb.length) fb.push('web');
+        return fb;
+      })();
   const nostalgia = entry.nostalgiaScore || 0;
   const smoke = entry.smokeIndex || 0;
   const isPublished = publishedEntries.includes(entry.id);
@@ -726,7 +737,7 @@ function PreviewPanel() {
             )}
 
             {/* Museum Metrics */}
-            {(nostalgia > 0 || smoke > 0 || platforms.length > 0) && (
+            {(nostalgia > 0 || smoke > 0 || displayPlatforms.length > 0) && (
               <div className="flex flex-wrap items-center gap-3 p-2.5 rounded-lg bg-gradient-to-r from-violet-50 to-amber-50 dark:from-violet-950/20 dark:to-amber-950/20 border border-violet-200/40 dark:border-violet-800/30">
                 {/* Nostalgia Score */}
                 {nostalgia > 0 && (
@@ -760,13 +771,11 @@ function PreviewPanel() {
                 )}
 
                 {/* Platform Tags */}
-                {platforms.length > 0 && (
-                  <div className="flex flex-wrap gap-1 flex-1 min-w-0">
-                    {platforms.map(p => (
-                      <span key={p} className="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-[9px] font-medium truncate max-w-[100px]" title={p}>{p}</span>
-                    ))}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-1 flex-1 min-w-0">
+                  {displayPlatforms.map(p => (
+                    <span key={p} className="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-[9px] font-medium truncate max-w-[100px]" title={p}>{p}</span>
+                  ))}
+                </div>
 
                 {/* Published indicator */}
                 {isPublished && (
@@ -890,7 +899,9 @@ function PreviewPanel() {
 
 const EXPORT_STATUS_OPTIONS = [
   { value: 'all', label: 'Todos' },
+  { value: 'approved+needs_editing', label: 'Aprobados + Edición' },
   { value: 'approved', label: 'Aprobados' },
+  { value: 'needs_editing', label: 'Necesitan Edición' },
   { value: 'pending', label: 'Pendientes' },
   { value: 'discarded', label: 'Descartados' },
 ] as const;

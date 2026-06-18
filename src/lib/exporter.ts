@@ -129,6 +129,7 @@ export function exportToHtml(
 // ── Export to Museum HTML (with plaques) ───────────────────────────────────
 
 export interface MuseumEntry {
+  id?: string;
   title: string;
   content: string;
   publishedAt: string | null;
@@ -259,9 +260,14 @@ export function generateMuseumCardHtml(entry: MuseumEntry): string {
         <div class="changelog-line c-chore">[CHORE] Revision de contenido</div>
     </div>`;
 
+  const badgeInner = '<i class="material-icons" style="font-size:14px">history</i> Post Rescatado';
+  const badgeHtml = entry.originalUrl
+    ? `<a class="badge" href="${entry.originalUrl}" target="_blank" rel="noopener noreferrer">${badgeInner}</a>`
+    : `<div class="badge">${badgeInner}</div>`;
+
   return `<div class="museum-card" style="--percent: ${nostalgia}%; --humo: ${smoke}%;">
     <div class="museum-card-header">
-        <div class="badge"><i class="material-icons" style="font-size:14px">history</i> Post Rescatado</div>
+        ${badgeHtml}
         <div class="original-date">Publicado originalmente: <strong>${formattedDate}</strong></div>
     </div>
     <div class="museum-card-body">
@@ -301,33 +307,42 @@ export function generateMuseumCardHtml(entry: MuseumEntry): string {
  * Each entry shows: museum card snippet (copy-ready) + post content below.
  */
 export function exportToMuseumHtml(entries: MuseumEntry[]): string {
-  const entriesHtml = entries.map(e => {
+  const entriesHtml = entries.map((e, i) => {
     const card = generateMuseumCardHtml(e);
     const labels: string[] = JSON.parse(e.labels || '[]');
     const labelBadges = labels.length > 0
       ? ` <span style="color:#888;font-size:12px">[${labels.join(', ')}]</span>`
       : '';
+    const entryId = e.id || `entry-${i}`;
     return `
-  <section style="margin-bottom:48px">
-    <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:8px;color:#111">${e.title}${labelBadges}</h2>
-    <div style="margin-bottom:12px;font-size:13px;color:#666">
+  <section id="${entryId}" class="entry-section" style="margin-bottom:48px;${e.status === 'discarded' ? 'opacity:0.4' : ''}">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <input type="checkbox" class="pub-toggle" data-id="${entryId}" style="width:18px;height:18px;cursor:pointer;accent-color:#16a34a;flex-shrink:0" />
+      <h2 style="font-size:1.2rem;font-weight:700;margin:0;color:#111;flex:1">${e.title}${labelBadges}</h2>
+    </div>
+    <div style="margin-bottom:12px;font-size:13px;color:#666;padding-left:30px">
       ${e.publishedAt ? formatDate(e.publishedAt) : 'Sin fecha'}
       ${e.author ? ` · ${e.author}` : ''}
       · ${e.wordCount.toLocaleString('es-AR')} palabras
+      ${e.status === 'discarded' ? ' · <span style="color:#dc2626;font-weight:600">DESCARTADO</span>' : ''}
     </div>
 
     <!-- Museum Card Snippet (copy this into Quill) -->
-    <div style="margin-bottom:16px;padding:12px;background:#f8f9fa;border:1px dashed #ccc;border-radius:6px;font-size:11px;color:#888;margin-bottom:12px">Museum Card Snippet ↓</div>
-    ${card}
+    <div style="margin-bottom:16px;padding:12px;background:#f8f9fa;border:1px dashed #ccc;border-radius:6px;font-size:11px;color:#888;margin-left:30px">Museum Card Snippet ↓</div>
+    <div style="margin-left:30px">${card}</div>
     <div style="margin-bottom:20px"></div>
 
     <!-- Post Content -->
-    <div style="line-height:1.7;color:#333;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+    <div style="line-height:1.7;color:#333;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding-left:30px">
       ${e.content}
     </div>
-    ${e.originalUrl ? `<div style="margin-top:8px;font-size:12px"><a href="${e.originalUrl}" style="color:#888">Ver original en Blogger</a></div>` : ''}
+    ${e.originalUrl ? `<div style="margin-top:8px;font-size:12px;padding-left:30px"><a href="${e.originalUrl}" style="color:#888">Ver original en Blogger</a></div>` : ''}
   </section>`;
   }).join('\n');
+
+  const highNostalgia = entries.filter(e => e.nostalgiaScore >= 50).length;
+  const withSmoke = entries.filter(e => e.smokeIndex >= 40).length;
+  const withPlatforms = entries.filter(e => JSON.parse(e.platforms || '[]').length > 0).length;
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -343,20 +358,57 @@ export function exportToMuseumHtml(entries: MuseumEntry[]): string {
     .summary-item { text-align: center; }
     .summary-item .num { font-size: 1.8rem; font-weight: 700; color: #333; }
     .summary-item .label { font-size: 0.8rem; color: #888; margin-top: 2px; }
+    .summary-item .num.pub-count { color: #16a34a; }
     img { max-width: 100%; height: auto; }
     a { color: inherit; }
+    .entry-section.published { border-left: 3px solid #16a34a; padding-left: 12px; }
+    .entry-section.published h2 { color: #16a34a; }
+    .toolbar { position: sticky; top: 0; background: #fff; border-bottom: 1px solid #e5e5e5; padding: 12px 0; margin-bottom: 20px; z-index: 10; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .toolbar .progress-bar { flex: 1; min-width: 200px; height: 8px; background: #e5e5e5; border-radius: 4px; overflow: hidden; }
+    .toolbar .progress-fill { height: 100%; background: #16a34a; border-radius: 4px; transition: width 0.3s ease; width: 0%; }
+    .toolbar .progress-text { font-size: 13px; font-weight: 600; color: #16a34a; white-space: nowrap; }
   </style>
 </head>
 <body>
   <h1>&#127963; Museo de Posts Rescatados</h1>
   <p class="subtitle">Generado el ${new Date().toLocaleDateString('es-AR')} — ${entries.length} entradas</p>
+
+  <div class="toolbar">
+    <span class="progress-text" id="pubText">0 / ${entries.length} publicados</span>
+    <div class="progress-bar"><div class="progress-fill" id="pubFill"></div></div>
+    <button onclick="toggleAll(true)" style="padding:4px 12px;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:12px">Marcar todos</button>
+    <button onclick="toggleAll(false)" style="padding:4px 12px;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:12px">Desmarcar todos</button>
+  </div>
+
   <div class="summary">
-    <div class="summary-item"><div class="num">${entries.length}</div><div class="label">Total</div></div>
-    <div class="summary-item"><div class="num">${entries.filter(e => e.nostalgiaScore >= 50).length}</div><div class="label">Alta nostalgia</div></div>
-    <div class="summary-item"><div class="num">${entries.filter(e => e.smokeIndex >= 40).length}</div><div class="label">Con humo</div></div>
-    <div class="summary-item"><div class="num">${entries.filter(e => JSON.parse(e.platforms || '[]').length > 0).length}</div><div class="label">Con plataformas</div></div>
+    <div class="summary-item"><div class="num" id="countTotal">${entries.length}</div><div class="label">Total</div></div>
+    <div class="summary-item"><div class="num pub-count" id="countPub">0</div><div class="label">Publicados</div></div>
+    <div class="summary-item"><div class="num">${highNostalgia}</div><div class="label">Alta nostalgia</div></div>
+    <div class="summary-item"><div class="num">${withSmoke}</div><div class="label">Con humo</div></div>
+    <div class="summary-item"><div class="num">${withPlatforms}</div><div class="label">Con plataformas</div></div>
   </div>
   ${entriesHtml}
+
+  <script>
+    var total = ${entries.length};
+    function updateCounts() {
+      var checked = document.querySelectorAll('.pub-toggle:checked').length;
+      document.getElementById('pubText').textContent = checked + ' / ' + total + ' publicados';
+      document.getElementById('pubFill').style.width = (checked / total * 100) + '%';
+      document.getElementById('countPub').textContent = checked;
+      document.querySelectorAll('.pub-toggle').forEach(function(cb) {
+        var section = document.getElementById(cb.dataset.id);
+        if (section) section.classList.toggle('published', cb.checked);
+      });
+    }
+    document.querySelectorAll('.pub-toggle').forEach(function(cb) {
+      cb.addEventListener('change', updateCounts);
+    });
+    function toggleAll(val) {
+      document.querySelectorAll('.pub-toggle').forEach(function(cb) { cb.checked = val; });
+      updateCounts();
+    }
+  </script>
 </body>
 </html>`;
 }
