@@ -1,9 +1,7 @@
 <p align="center">
   <img src="public/logo.png" alt="AtomCleaner" width="80" height="80" />
 </p>
-
 <h1 align="center">AtomCleaner</h1>
-
 <p align="center">
   <strong>Curador</strong> — Herramienta de rescate y migracion desde Blogger a Astro+Supabase
 </p>
