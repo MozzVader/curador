@@ -42,6 +42,76 @@ const DEAD_IMAGE_HOSTS = [
   'picoodle',
 ];
 
+// ── Platform Definitions (for nostalgia & smoke detection) ─────────────────
+
+export interface PlatformMatch {
+  name: string;
+  category: 'video_hosting' | 'image_hosting' | 'social' | 'messaging' | 'technology' | 'service' | 'os';
+  matchType: 'link' | 'embed' | 'mention';
+  nostalgiaWeight: number;
+  smokeWeight: number;
+}
+
+interface PlatformDef {
+  name: string;
+  category: PlatformMatch['category'];
+  patterns: RegExp[];
+  matchType: PlatformMatch['matchType'];
+  nostalgiaWeight: number;
+  smokeWeight: number;
+}
+
+const PLATFORM_DEFS: PlatformDef[] = [
+  // ── Video hosting (dead) ──
+  { name: 'Megavideo', category: 'video_hosting', patterns: [/megavideo\.(com|es)/i], matchType: 'link', nostalgiaWeight: 12, smokeWeight: 5 },
+  { name: 'Megaupload', category: 'video_hosting', patterns: [/megaupload\.(com|net)/i], matchType: 'link', nostalgiaWeight: 12, smokeWeight: 5 },
+  { name: 'Putlocker', category: 'video_hosting', patterns: [/putlock(?:er|s)\.(com|is|ch|pw)/i], matchType: 'link', nostalgiaWeight: 8, smokeWeight: 5 },
+  { name: 'Videoweed', category: 'video_hosting', patterns: [/videoweed\.(es|com)/i], matchType: 'link', nostalgiaWeight: 8, smokeWeight: 4 },
+  { name: 'Novamov', category: 'video_hosting', patterns: [/novamov\.(com|es)/i], matchType: 'link', nostalgiaWeight: 8, smokeWeight: 4 },
+  { name: 'Movshare', category: 'video_hosting', patterns: [/movshare\.net/i], matchType: 'link', nostalgiaWeight: 8, smokeWeight: 4 },
+  { name: 'Stagevu', category: 'video_hosting', patterns: [/stagevu\.(com|es)/i], matchType: 'link', nostalgiaWeight: 7, smokeWeight: 4 },
+  { name: 'DivxStage', category: 'video_hosting', patterns: [/divxstage\.(com|net)/i, /xvidstage\.(com|net)/i], matchType: 'link', nostalgiaWeight: 7, smokeWeight: 4 },
+  { name: 'Duckload', category: 'video_hosting', patterns: [/duckload\.(com|net)/i], matchType: 'link', nostalgiaWeight: 7, smokeWeight: 4 },
+  { name: 'FileServe', category: 'video_hosting', patterns: [/fileserve\.com/i], matchType: 'link', nostalgiaWeight: 6, smokeWeight: 3 },
+  { name: 'FileSonic', category: 'video_hosting', patterns: [/filesonic\./i], matchType: 'link', nostalgiaWeight: 6, smokeWeight: 3 },
+  { name: 'RapidShare', category: 'video_hosting', patterns: [/rapidshare\.com/i], matchType: 'link', nostalgiaWeight: 6, smokeWeight: 3 },
+  { name: '4shared', category: 'video_hosting', patterns: [/4shared\.com/i], matchType: 'link', nostalgiaWeight: 5, smokeWeight: 3 },
+
+  // ── Image hosting (dead/degraded) ──
+  { name: 'Imageshack', category: 'image_hosting', patterns: [/imageshack\./i], matchType: 'link', nostalgiaWeight: 4, smokeWeight: 3 },
+  { name: 'Photobucket', category: 'image_hosting', patterns: [/photobucket\./i], matchType: 'link', nostalgiaWeight: 4, smokeWeight: 3 },
+  { name: 'Tinypic', category: 'image_hosting', patterns: [/tinypic\.(com|net)/i], matchType: 'link', nostalgiaWeight: 4, smokeWeight: 3 },
+  { name: 'Subefotos', category: 'image_hosting', patterns: [/subefotos\.com/i], matchType: 'link', nostalgiaWeight: 4, smokeWeight: 3 },
+  { name: 'Imagebam', category: 'image_hosting', patterns: [/imagebam\./i], matchType: 'link', nostalgiaWeight: 4, smokeWeight: 3 },
+
+  // ── Social networks (dead) ──
+  { name: 'Google+', category: 'social', patterns: [/plus\.google\.com/i, /google\+/i, /gplus\./i], matchType: 'link', nostalgiaWeight: 8, smokeWeight: 4 },
+  { name: 'Orkut', category: 'social', patterns: [/orkut\.com/i, /\borkut\b/i], matchType: 'mention', nostalgiaWeight: 8, smokeWeight: 4 },
+  { name: 'Hi5', category: 'social', patterns: [/hi5\.com/i, /\bhi5\b/i], matchType: 'mention', nostalgiaWeight: 6, smokeWeight: 3 },
+  { name: 'MySpace', category: 'social', patterns: [/myspace\.com/i, /\bmyspace\b/i], matchType: 'mention', nostalgiaWeight: 5, smokeWeight: 2 },
+  { name: 'Vine', category: 'social', patterns: [/vine\.co/i, /\bvine\b(?=\s|.|$)/i], matchType: 'mention', nostalgiaWeight: 5, smokeWeight: 2 },
+
+  // ── Messaging (dead) ──
+  { name: 'MSN Messenger', category: 'messaging', patterns: [/msn\s*messenger/i, /windows\s*live\s*messenger/i], matchType: 'mention', nostalgiaWeight: 8, smokeWeight: 3 },
+  { name: 'ICQ', category: 'messaging', patterns: [/\bicq\b/i, /icq\.com/i], matchType: 'mention', nostalgiaWeight: 8, smokeWeight: 3 },
+  { name: 'Yahoo Messenger', category: 'messaging', patterns: [/yahoo\s*messenger/i], matchType: 'mention', nostalgiaWeight: 6, smokeWeight: 3 },
+
+  // ── Technologies (dead/deprecated) ──
+  { name: 'Flash Player', category: 'technology', patterns: [/flash\s*player/i, /\.swf\b/i, /<object[^>]*flash/i, /<embed[^>]*\.swf/i], matchType: 'embed', nostalgiaWeight: 15, smokeWeight: 6 },
+  { name: 'Shockwave', category: 'technology', patterns: [/shockwave/i, /\.dcr\b/i], matchType: 'embed', nostalgiaWeight: 10, smokeWeight: 4 },
+  { name: 'Silverlight', category: 'technology', patterns: [/silverlight/i], matchType: 'embed', nostalgiaWeight: 10, smokeWeight: 4 },
+  { name: 'Java Applet', category: 'technology', patterns: [/<applet\b/i, /java\s*applet/i], matchType: 'embed', nostalgiaWeight: 10, smokeWeight: 4 },
+  { name: 'Internet Explorer', category: 'technology', patterns: [/internet\s*explorer\s*[6-8]/i, /\bie[6-8]\b/i], matchType: 'mention', nostalgiaWeight: 6, smokeWeight: 3 },
+
+  // ── Services (dead) ──
+  { name: 'Google Reader', category: 'service', patterns: [/google\.com\/reader/i, /google\s*reader/i], matchType: 'mention', nostalgiaWeight: 6, smokeWeight: 3 },
+  { name: 'StumbleUpon', category: 'service', patterns: [/stumbleupon\.com/i, /\bstumble\s*upon\b/i], matchType: 'mention', nostalgiaWeight: 5, smokeWeight: 2 },
+
+  // ── Operating systems (era-specific) ──
+  { name: 'Windows XP', category: 'os', patterns: [/windows\s*xp/i, /win\s*xp/i, /winxp\b/i], matchType: 'mention', nostalgiaWeight: 5, smokeWeight: 2 },
+  { name: 'Windows 7', category: 'os', patterns: [/windows\s*7\b/i, /win\s*7\b/i, /win7\b/i], matchType: 'mention', nostalgiaWeight: 3, smokeWeight: 1 },
+];
+
 // ── Safe text extraction ────────────────────────────────────────────────────
 
 function getText(value: unknown): string {
@@ -552,6 +622,106 @@ export function detectIssues(content: string, title: string, entryType?: string)
   // content are NORMAL for a Blogger migration and should not be flagged as issues.
 
   return issues;
+}
+
+// ── Platform Detector ─────────────────────────────────────────────────────
+
+/**
+ * Scans HTML content for references to extinct/dead internet platforms.
+ * Each platform is counted at most once per entry.
+ */
+export function detectPlatforms(content: string): PlatformMatch[] {
+  const matches: PlatformMatch[] = [];
+  const seen = new Set<string>();
+
+  for (const def of PLATFORM_DEFS) {
+    if (seen.has(def.name)) continue;
+    for (const pattern of def.patterns) {
+      if (pattern.test(content)) {
+        seen.add(def.name);
+        matches.push({
+          name: def.name,
+          category: def.category,
+          matchType: def.matchType,
+          nostalgiaWeight: def.nostalgiaWeight,
+          smokeWeight: def.smokeWeight,
+        });
+        break;
+      }
+    }
+  }
+
+  return matches;
+}
+
+// ── Nostalgia Score Calculator ────────────────────────────────────────────
+
+/**
+ * Calculates a 0-100 nostalgia score based on:
+ *   - Date: 2009 → 30%, 2010 → 25%, 2011 → 20%, 2012 → 15%, 2013+ → 10%
+ *   - Platforms: the remaining percentage, scaled by detected dead platforms.
+ *
+ *   A 2009 post with Flash + Megavideo + MSN + WinXP ≈ 70%
+ *   A 2012 post with no dead platforms ≈ 15%
+ */
+export function calculateNostalgiaScore(publishedAt: string | null, platforms: PlatformMatch[]): number {
+  // Date component — max 30% for oldest posts (2009), min 5% for recent
+  let dateScore = 5;
+  if (publishedAt) {
+    const year = new Date(publishedAt).getFullYear();
+    if (year <= 2009) dateScore = 30;
+    else if (year === 2010) dateScore = 25;
+    else if (year === 2011) dateScore = 20;
+    else if (year === 2012) dateScore = 15;
+    else if (year <= 2014) dateScore = 10;
+    else dateScore = 5;
+  }
+
+  // Platform component — fills the remaining percentage
+  // Normalization factor: 50 total weight = full platform score
+  const NORMALIZATION_FACTOR = 50;
+  const rawWeight = platforms.reduce((sum, p) => sum + p.nostalgiaWeight, 0);
+  const maxPlatformScore = 100 - dateScore;
+  const normalizedPlatform = Math.min(maxPlatformScore, Math.round((rawWeight / NORMALIZATION_FACTOR) * maxPlatformScore));
+
+  return Math.min(100, dateScore + normalizedPlatform);
+}
+
+// ── Smoke Index Calculator ────────────────────────────────────────────────
+
+/**
+ * Calculates a 0-100 baseline smoke index (the user adjusts the final value).
+ * Based on detected dead platforms + content issues.
+ *   0-20  → Leve
+ *   21-40 → Moderado
+ *   41-60 → Moderado-Alto
+ *   61-80 → Alto
+ *   81-100 → Humo Total
+ */
+export function calculateSmokeIndex(platforms: PlatformMatch[], issues: Issue[]): number {
+  let smoke = 0;
+
+  // Platform-based smoke
+  smoke += platforms.reduce((sum, p) => sum + p.smokeWeight, 0);
+
+  // Issue-based bonus (only issues not already captured by platform detection)
+  for (const issue of issues) {
+    switch (issue.type) {
+      case 'no_title': smoke += 3; break;
+      case 'empty_content': smoke += 8; break;
+      case 'short_content': smoke += 3; break;
+    }
+  }
+
+  return Math.min(100, smoke);
+}
+
+export function getSmokeLevel(index: number): string {
+  if (index <= 20) return 'Leve';
+  if (index <= 40) return 'Moderado';
+  if (index <= 60) return 'Moderado-Alto';
+  if (index <= 80) return 'Alto';
+  return 'Humo Total';
 }
 
 // ── Content Cleaner ────────────────────────────────────────────────────────
