@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model BlogEntry {
+  id           String   @id @default(cuid())
+  entryId      String   @unique // Original Atom <id> value
+  entryType    String   // POST, PAGE, DRAFT, COMMENT
+  title        String
+  content      String   // Raw HTML content from Atom
+  publishedAt  String?  // ISO date from <published>
+  atomUpdated  String?  // ISO date from Atom <updated>
+  author       String?
+  labels       String   @default("[]") // JSON array of label strings
+  originalUrl  String?  // <link rel="alternate"> href
+  status       String   @default("pending") // pending | approved | discarded | needs_editing
+  issues       String   @default("[]") // JSON array of issue objects {type, message}
+  wordCount    Int      @default(0)
+  commentCount Int      @default(0)
+  parentId     String?  // For comments: the parent post's entryId
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
